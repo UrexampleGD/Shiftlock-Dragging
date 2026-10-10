@@ -1,5 +1,5 @@
 -- # Requested
--- # Lemme try bro
+-- # idk
 
 local insert = table.insert
 
@@ -49,7 +49,6 @@ local players = game:GetService("Players")
 local runservice = game:GetService("RunService")
 local inputservice = game:GetService("UserInputService")
 local httpservice = game:GetService("HttpService")
-local coregui = game:GetService("CoreGui")
 
 local localplayer = players.LocalPlayer
 
@@ -74,7 +73,7 @@ local macro = shared.CreateTab("Shiftlock", "/UrexampleGD/ok-icon/refs/heads/mai
 
 local about = macro:AddSection("About", "Information")
 
-about:AddParagraph("Shiftlock", "Plugin Made by le exirl")
+about:AddParagraph("Shiftlock", "tududu")
 
 pcall(function() shared.Notify("Shiftlock Loaded", 2) end)
 
@@ -89,33 +88,16 @@ local lastposition = nil
 local keepalive = false
 
 local function findshiftlock()
-    local names = {"shiftlock", "shift", "lock"}
-
-    local function matches(name)
-        local lower = string.lower(name)
-        for _, key in ipairs(names) do
-            if string.find(lower, key, 1, true) then return true end
-        end
-        return false
-    end
-
-    local function scan(root)
-        if not root then return nil end
-        for _, desc in ipairs(root:GetDescendants()) do
-            if desc:IsA("GuiButton") and desc.Visible and matches(desc.Name) then
-                return desc
-            end
-        end
-        return nil
-    end
-
     local pg = localplayer:FindFirstChild("PlayerGui")
-    local found = scan(pg)
-    if found then return found end
-
-    found = scan(coregui)
-    if found then return found end
-
+    if not pg then return nil end
+    local topbar = pg:FindFirstChild("GameTopBar")
+    if not topbar then return nil end
+    local container = topbar:FindFirstChild("Container")
+    if not container then return nil end
+    local btn = container:FindFirstChild("MouseLock")
+    if btn and btn:IsA("GuiButton") then
+        return btn
+    end
     return nil
 end
 
