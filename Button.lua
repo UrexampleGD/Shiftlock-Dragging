@@ -1,6 +1,7 @@
 -- # Requested
 -- # idk
 
+
 local insert = table.insert
 
 local maid = {}
@@ -49,6 +50,7 @@ local players = game:GetService("Players")
 local runservice = game:GetService("RunService")
 local inputservice = game:GetService("UserInputService")
 local httpservice = game:GetService("HttpService")
+local coregui = game:GetService("CoreGui")
 
 local localplayer = players.LocalPlayer
 
@@ -73,7 +75,7 @@ local macro = shared.CreateTab("Shiftlock", "/UrexampleGD/ok-icon/refs/heads/mai
 
 local about = macro:AddSection("About", "Information")
 
-about:AddParagraph("Shiftlock", "tududu")
+about:AddParagraph("Shiftlock", "ok")
 
 pcall(function() shared.Notify("Shiftlock Loaded", 2) end)
 
@@ -85,9 +87,9 @@ rootmaid:givetask(shiftlockmaid)
 local activebutton = nil
 local activemaid = maid.new()
 local lastposition = nil
-local keepalive = false
+local enabled = false
 
-local function findshiftlock()
+local function findbutton()
     local pg = localplayer:FindFirstChild("PlayerGui")
     if not pg then return nil end
     local topbar = pg:FindFirstChild("GameTopBar")
@@ -95,10 +97,31 @@ local function findshiftlock()
     local container = topbar:FindFirstChild("Container")
     if not container then return nil end
     local btn = container:FindFirstChild("MouseLock")
-    if btn and btn:IsA("GuiButton") then
-        return btn
-    end
+    if btn and btn:IsA("GuiButton") then return btn end
     return nil
+end
+
+local function getfloat()
+    local existing = coregui:FindFirstChild("@ShiftlockFloat")
+    if existing then return existing end
+    local screen = Instance.new("ScreenGui")
+    screen.Name = "@ShiftlockFloat"
+    screen.ResetOnSpawn = false
+    screen.IgnoreGuiInset = true
+    screen.DisplayOrder = 999999
+    screen.Parent = coregui
+    return screen
+end
+
+local function harvest(btn)
+    local abs = btn.AbsolutePosition
+    local size = btn.AbsoluteSize
+    if size.X <= 0 or size.Y <= 0 then return false end
+    btn.Parent = getfloat()
+    btn.AnchorPoint = Vector2.new(0, 0)
+    btn.Size = UDim2.fromOffset(size.X, size.Y)
+    btn.Position = UDim2.fromOffset(abs.X, abs.Y)
+    return true
 end
 
 local function makedraggable(btn)
@@ -151,60 +174,65 @@ local function makedraggable(btn)
     end))
 end
 
-local function startkeepalive()
-    if keepalive then return end
-    keepalive = true
-
-    shiftlockmaid:givetask(runservice.RenderStepped:Connect(function()
-        if not activebutton then return end
-        if not lastposition then return end
-        if not activebutton.Parent then
-            activebutton = nil
+local function watch()
+    local attempts = 0
+    while enabled and attempts < 200 do
+        local btn = findbutton()
+        if btn and btn.Visible and btn.AbsoluteSize.X > 0 then
+            activebutton = btn
+            harvest(btn)
+            local saved = loadpositions()["_shiftlock"]
+            if saved then
+                lastposition = UDim2.new(saved.xs or 0, saved.xo or 0, saved.ys or 0, saved.yo or 0)
+                pcall(function() btn.Position = lastposition end)
+            else
+                lastposition = btn.Position
+            end
+            makedraggable(btn)
+            pcall(function() shared.Notify("Shiftlock hooked", 2) end)
             return
         end
-        pcall(function()
-            activebutton.Position = lastposition
-        end)
-    end))
+        attempts = attempts + 1
+        task.wait(0.1)
+    end
+    if enabled then
+        pcall(function() shared.Notify("Shiftlock button not found", 3) end)
+    end
 end
 
 local function applyshiftlock(on)
+    enabled = on
     activebutton = nil
     lastposition = nil
     activemaid:clean()
     activemaid = maid.new()
+    shiftlockmaid:clean()
+    shiftlockmaid = maid.new()
+    rootmaid:givetask(shiftlockmaid)
 
     if not on then
-        keepalive = false
-        shiftlockmaid:clean()
-        shiftlockmaid = maid.new()
-        rootmaid:givetask(shiftlockmaid)
         return
     end
 
-    task.spawn(function()
-        local attempts = 0
-        while attempts < 200 do
-            local btn = findshiftlock()
-            if btn then
-                activebutton = btn
-                local saved = loadpositions()["_shiftlock"]
-                if saved then
-                    lastposition = UDim2.new(saved.xs or 0, saved.xo or 0, saved.ys or 0, saved.yo or 0)
-                    pcall(function() btn.Position = lastposition end)
-                else
-                    lastposition = btn.Position
-                end
-                makedraggable(btn)
-                startkeepalive()
-                pcall(function() shared.Notify("Shiftlock button hooked", 2) end)
-                return
-            end
-            attempts = attempts + 1
-            task.wait(0.1)
+    shiftlockmaid:givetask(runservice.Heartbeat:Connect(function()
+        if not enabled then return end
+        if not activebutton or not activebutton.Parent then
+            activebutton = nil
+            task.spawn(watch)
+            return
         end
-        pcall(function() shared.Notify("Shiftlock button not found", 3) end)
-    end)
+        local current = findbutton()
+        if current and current ~= activebutton then
+            activebutton = nil
+            task.spawn(watch)
+            return
+        end
+        if lastposition then
+            pcall(function() activebutton.Position = lastposition end)
+        end
+    end))
+
+    task.spawn(watch)
 end
 
 section:AddLabel("Shiftlock Options")
