@@ -1,7 +1,6 @@
 -- # Requested
 -- # idk
 
-
 local insert = table.insert
 
 local maid = {}
@@ -75,7 +74,7 @@ local macro = shared.CreateTab("Shiftlock", "/UrexampleGD/ok-icon/refs/heads/mai
 
 local about = macro:AddSection("About", "Information")
 
-about:AddParagraph("Shiftlock", "ok")
+about:AddParagraph("Shiftlock", "gugu")
 
 pcall(function() shared.Notify("Shiftlock Loaded", 2) end)
 
@@ -89,16 +88,62 @@ local activemaid = maid.new()
 local lastposition = nil
 local enabled = false
 
+local function scansomething(root, pattern)
+    if not root then return nil end
+    for _, desc in ipairs(root:GetDescendants()) do
+        if desc:IsA("GuiButton") then
+            local lower = string.lower(desc.Name)
+            if string.find(lower, pattern, 1, true) then
+                return desc
+            end
+        end
+    end
+    return nil
+end
+
 local function findbutton()
     local pg = localplayer:FindFirstChild("PlayerGui")
     if not pg then return nil end
+
     local topbar = pg:FindFirstChild("GameTopBar")
-    if not topbar then return nil end
-    local container = topbar:FindFirstChild("Container")
-    if not container then return nil end
-    local btn = container:FindFirstChild("MouseLock")
-    if btn and btn:IsA("GuiButton") then return btn end
+    if topbar then
+        local container = topbar:FindFirstChild("Container")
+        if container then
+            local btn = container:FindFirstChild("MouseLock")
+            if btn and btn:IsA("GuiButton") then return btn end
+        end
+        local direct = topbar:FindFirstChild("MouseLock", true)
+        if direct and direct:IsA("GuiButton") then return direct end
+    end
+
+    local byname = scansomething(pg, "mouselock")
+    if byname then return byname end
+
+    local bylock = scansomething(pg, "lock")
+    if bylock then return bylock end
+
+    local bymouse = scansomething(pg, "mouse")
+    if bymouse then return bymouse end
+
     return nil
+end
+
+local function dumpgui()
+    local pg = localplayer:FindFirstChild("PlayerGui")
+    if not pg then
+        pcall(function() shared.Notify("PlayerGui missing", 3) end)
+        return
+    end
+    local found = {}
+    for _, desc in ipairs(pg:GetDescendants()) do
+        if desc:IsA("GuiButton") then
+            table.insert(found, desc.Name)
+        end
+    end
+    local topbar = pg:FindFirstChild("GameTopBar")
+    local topstatus = topbar and "yes" or "no"
+    local msg = "TopBar:" .. topstatus .. " Buttons:" .. tostring(#found)
+    pcall(function() shared.Notify(msg, 5) end)
 end
 
 local function getfloat()
@@ -176,7 +221,7 @@ end
 
 local function watch()
     local attempts = 0
-    while enabled and attempts < 200 do
+    while enabled and attempts < 300 do
         local btn = findbutton()
         if btn and btn.Visible and btn.AbsoluteSize.X > 0 then
             activebutton = btn
@@ -196,6 +241,7 @@ local function watch()
         task.wait(0.1)
     end
     if enabled then
+        dumpgui()
         pcall(function() shared.Notify("Shiftlock button not found", 3) end)
     end
 end
@@ -248,4 +294,7 @@ section:AddButton("Reset Shiftlock Position", function()
         lastposition = activebutton.Position
     end
     pcall(function() shared.Notify("Shiftlock position reset", 2) end)
+end)
+section:AddButton("Dump Gui Info", function()
+    dumpgui()
 end)
