@@ -1,6 +1,7 @@
 -- # Requested
 -- # idk
 
+
 local insert = table.insert
 
 local maid = {}
@@ -46,7 +47,6 @@ task.spawn(function()
 end)
 
 local players = game:GetService("Players")
-local runservice = game:GetService("RunService")
 local inputservice = game:GetService("UserInputService")
 local httpservice = game:GetService("HttpService")
 local coregui = game:GetService("CoreGui")
@@ -74,7 +74,7 @@ local macro = shared.CreateTab("Shiftlock", "/UrexampleGD/ok-icon/refs/heads/mai
 
 local about = macro:AddSection("About", "Information")
 
-about:AddParagraph("Shiftlock", "gugu")
+about:AddParagraph("Shiftlock", "testing")
 
 pcall(function() shared.Notify("Shiftlock Loaded", 2) end)
 
@@ -87,19 +87,6 @@ local activebutton = nil
 local activemaid = maid.new()
 local lastposition = nil
 local enabled = false
-
-local function scansomething(root, pattern)
-    if not root then return nil end
-    for _, desc in ipairs(root:GetDescendants()) do
-        if desc:IsA("GuiButton") then
-            local lower = string.lower(desc.Name)
-            if string.find(lower, pattern, 1, true) then
-                return desc
-            end
-        end
-    end
-    return nil
-end
 
 local function findbutton()
     local pg = localplayer:FindFirstChild("PlayerGui")
@@ -116,34 +103,24 @@ local function findbutton()
         if direct and direct:IsA("GuiButton") then return direct end
     end
 
-    local byname = scansomething(pg, "mouselock")
-    if byname then return byname end
-
-    local bylock = scansomething(pg, "lock")
-    if bylock then return bylock end
-
-    local bymouse = scansomething(pg, "mouse")
-    if bymouse then return bymouse end
-
     return nil
 end
 
-local function dumpgui()
+local function countbuttons()
     local pg = localplayer:FindFirstChild("PlayerGui")
-    if not pg then
-        pcall(function() shared.Notify("PlayerGui missing", 3) end)
-        return
-    end
-    local found = {}
+    if not pg then return 0, "no playergui" end
+    local count = 0
     for _, desc in ipairs(pg:GetDescendants()) do
-        if desc:IsA("GuiButton") then
-            table.insert(found, desc.Name)
-        end
+        if desc:IsA("GuiButton") then count = count + 1 end
     end
     local topbar = pg:FindFirstChild("GameTopBar")
-    local topstatus = topbar and "yes" or "no"
-    local msg = "TopBar:" .. topstatus .. " Buttons:" .. tostring(#found)
-    pcall(function() shared.Notify(msg, 5) end)
+    return count, topbar and "yes" or "no"
+end
+
+local function dumpgui()
+    local count, topstatus = countbuttons()
+    local msg = "TopBar:" .. topstatus .. " Buttons:" .. tostring(count)
+    pcall(function() shared.Notify(msg, 6) end)
 end
 
 local function getfloat()
@@ -152,7 +129,7 @@ local function getfloat()
     local screen = Instance.new("ScreenGui")
     screen.Name = "@ShiftlockFloat"
     screen.ResetOnSpawn = false
-    screen.IgnoreGuiInset = true
+    screen.IgnoreGuiInset = false
     screen.DisplayOrder = 999999
     screen.Parent = coregui
     return screen
@@ -166,6 +143,8 @@ local function harvest(btn)
     btn.AnchorPoint = Vector2.new(0, 0)
     btn.Size = UDim2.fromOffset(size.X, size.Y)
     btn.Position = UDim2.fromOffset(abs.X, abs.Y)
+    pcall(function() btn.Active = true end)
+    pcall(function() btn.Selectable = true end)
     return true
 end
 
@@ -221,28 +200,29 @@ end
 
 local function watch()
     local attempts = 0
-    while enabled and attempts < 300 do
+    while enabled and attempts < 100 do
         local btn = findbutton()
         if btn and btn.Visible and btn.AbsoluteSize.X > 0 then
-            activebutton = btn
-            harvest(btn)
-            local saved = loadpositions()["_shiftlock"]
-            if saved then
-                lastposition = UDim2.new(saved.xs or 0, saved.xo or 0, saved.ys or 0, saved.yo or 0)
-                pcall(function() btn.Position = lastposition end)
-            else
-                lastposition = btn.Position
+            if harvest(btn) then
+                activebutton = btn
+                local saved = loadpositions()["_shiftlock"]
+                if saved then
+                    lastposition = UDim2.new(saved.xs or 0, saved.xo or 0, saved.ys or 0, saved.yo or 0)
+                    pcall(function() btn.Position = lastposition end)
+                else
+                    lastposition = btn.Position
+                end
+                makedraggable(btn)
+                pcall(function() shared.Notify("Shiftlock hooked", 2) end)
+                return
             end
-            makedraggable(btn)
-            pcall(function() shared.Notify("Shiftlock hooked", 2) end)
-            return
         end
         attempts = attempts + 1
-        task.wait(0.1)
+        task.wait(0.5)
     end
     if enabled then
         dumpgui()
-        pcall(function() shared.Notify("Shiftlock button not found", 3) end)
+        pcall(function() shared.Notify("Shiftlock not found", 3) end)
     end
 end
 
@@ -260,21 +240,15 @@ local function applyshiftlock(on)
         return
     end
 
-    shiftlockmaid:givetask(runservice.Heartbeat:Connect(function()
-        if not enabled then return end
-        if not activebutton or not activebutton.Parent then
-            activebutton = nil
-            task.spawn(watch)
-            return
-        end
-        local current = findbutton()
-        if current and current ~= activebutton then
-            activebutton = nil
-            task.spawn(watch)
-            return
-        end
-        if lastposition then
-            pcall(function() activebutton.Position = lastposition end)
+    -- Slow watchdog: only checks every 1 second, NOT every frame
+    shiftlockmaid:givetask(task.spawn(function()
+        while enabled do
+            task.wait(1)
+            if not enabled then break end
+            if not activebutton or not activebutton.Parent then
+                activebutton = nil
+                task.spawn(watch)
+            end
         end
     end))
 
@@ -297,4 +271,12 @@ section:AddButton("Reset Shiftlock Position", function()
 end)
 section:AddButton("Dump Gui Info", function()
     dumpgui()
+end)
+section:AddButton("Force Find Now", function()
+    local btn = findbutton()
+    if btn then
+        pcall(function() shared.Notify("Found: " .. btn:GetFullName(), 6) end)
+    else
+        dumpgui()
+    end
 end)
